@@ -46,7 +46,7 @@
                 faceDetector = await blazeface.load();
                 
                 // 2. Load your custom converted Keras model files from the web folder
-                model = await tf.loadLayersModel('./web_model/model.json');
+                model = await tf.loadLayersModel('model.json');
                 
                 document.getElementById('status').innerText = "✅ Systems Active. Running Inference Locally.";
                 document.getElementById('status').style.borderColor = "#2ca02c";
