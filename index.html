@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Client-Side Emotion Detection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; text-align: center; background: #121212; color: white; margin: 0; padding: 20px; }
+        h1 { color: #1f77b4; margin-bottom: 5px; }
+        #status { background: #1e1e1e; padding: 10px; display: inline-block; border-radius: 5px; margin-bottom: 20px; border: 1px solid #333; }
+        .video-container { position: relative; width: 640px; height: 480px; margin: 0 auto; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        video, canvas { position: absolute; top: 0; left: 0; transform: scaleX(-1); }
+    </style>
+</head>
+<body>
+
+    <h1>Real-Time Student Emotion Tracker</h1>
+    <p>Client-Side Execution Engine — Zero Network Latency</p>
+    <div id="status">🔄 Initializing Deep Learning Core Dependencies...</div>
+
+    <div class="video-container">
+        <video id="webcam" width="640" height="480" autoplay muted playsinline></video>
+        <canvas id="overlay" width="640" height="480"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        let model, faceDetector;
+
+        // Exact class structure matching your 16,082 image distribution pipeline
+        const emotionLabels = {0: "Angry", 1: "Happy", 2: "Neutral", 3: "Sad", 4: "Surprised"};
+
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = stream;
+            return new Promise((resolve) => video.onloadedmetadata = () => resolve(video));
+        }
+
+        async function initApplication() {
+            try {
+                // 1. Load the lightweight face bounding-box model
+                faceDetector = await blazeface.load();
+                
+                // 2. Load your custom converted Keras model files from the web folder
+                model = await tf.loadLayersModel('./web_model/model.json');
+                
+                document.getElementById('status').innerText = "✅ Systems Active. Running Inference Locally.";
+                document.getElementById('status').style.borderColor = "#2ca02c";
+                
+                await setupCamera();
+                video.play();
+                detectFrameLoop();
+            } catch (error) {
+                document.getElementById('status').innerText = "❌ Error booting models. Confirm paths are correct.";
+                console.error(error);
+            }
+        }
+
+        async function detectFrameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Extract facial coordinate points instantly inside the browser
+            const facePredictions = await faceDetector.estimateFaces(video, false);
+            
+            if (facePredictions.length > 0) {
+                for (let i = 0; i < facePredictions.length; i++) {
+                    const startCoords = facePredictions[i].topLeft;
+                    const endCoords = facePredictions[i].bottomRight;
+                    const boxDimensions = [endCoords[0] - startCoords[0], endCoords[1] - startCoords[1]];
+
+                    // Render a clean green bounding frame box on the active canvas layer
+                    ctx.strokeStyle = "#00FF00";
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(startCoords[0], startCoords[1], boxDimensions[0], boxDimensions[1]);
+
+                    // Browser-native image processing pipeline mirroring your exact Python normalization arrays
+                    tf.tidy(() => {
+                        let originalTensor = tf.browser.fromPixels(video);
+                        
+                        // Slice, resize to 48x48, convert to grayscale, and scale values to [0, 1]
+                        let processedFace = originalTensor
+                            .slice([parseInt(startCoords[1]), parseInt(startCoords[0]), 0], [parseInt(boxDimensions[1]), parseInt(boxDimensions[0]), 3])
+                            .resizeBilinear([48, 48])
+                            .mean(2) 
+                            .expandDims(-1)
+                            .expandDims(0)
+                            .toFloat()
+                            .div(255.0);
+
+                        // Calculate execution predictions instantly on the local hardware GPU
+                        const modelOutput = model.predict(processedFace);
+                        const predictionScores = modelOutput.dataSync();
+                        const targetedClassIndex = predictionScores.indexOf(Math.max(...predictionScores));
+                        const calculatedEmotion = emotionLabels[targetedClassIndex];
+
+                        // Render text labels above the tracked face
+                        ctx.fillStyle = "#00FF00";
+                        ctx.font = "bold 20px Arial";
+                        ctx.fillText(calculatedEmotion, startCoords[0], startCoords[1] - 12);
+                    });
+                }
+            }
+            // Request next instant video frame draw loop without server delays
+            requestAnimationFrame(detectFrameLoop);
+        }
+
+        initApplication();
+    </script>
+</body>
+</html>
